@@ -1,76 +1,129 @@
-from mesa import Model
-from agente import AspiradoraAgent
-from mesa.time import SimultaneousActivation 
-from mesa.space import MultiGrid
+"""
+    Model Class for the Roomba Simulation initializing the model and the agents.
 
-from mesa.time import RandomActivation
-from mesa.datacollection import DataCollector
+    Authors:
+        - Carlos Alan Gallegos Espindola (A01751117)
+        - Paulina Guadalupe Alva Martinez (A01750624)
+
+    Date of creation: 10/11/2022
+    Last Modification: 11/11/2022
+"""
+
+# Imports
+from mesa import Model # Base class for model
+from Agentes import AspiradoraAgent # Agent class
+from mesa.time import RandomActivation # Scheduler
+from mesa.space import MultiGrid # Grid class
+from mesa.datacollection import DataCollector # Data collector
+import time # Time library for countdown timer
+
+class ModeloRoomba(Model):
+    """ Model Class for the Roomba Simulation initializing the model and the agents.
+
+    Methods:
+        step: Advance the model by one step.
+        current_trashes: Get the number of trashes in the grid.
+        timer: Get the time left in the simulation.
     
-class AspiradoraModel(Model):
+    """
 
-    def __init__(self, number_of_agents, width, height):
-        self.num_agents = number_of_agents
-        self.grid = MultiGrid(width, height, torus=True)
-        self.schedule = SimultaneousActivation(self)
-        self.running = True  
+    def __init__(self, numberOfAgents, numberOfTrashes, width, height, seconds):
+        """Initialize a new Roomba Model.
+        
+        Args:
+            numberOfAgents: Number of Roombas in the simulation. (int)
+            numberOfTrashes: Number of Trashes in the simulation. (int)
+            width: Width of the grid. (int)
+            height: Height of the grid. (int)
+            seconds: Number of seconds to run the simulation. (int)
+            
+        Returns:
+            None
+        """
+        self.num_agents = numberOfAgents
+        self.num_trashes = numberOfTrashes
+        self.grid = MultiGrid(width, height, True)
+        self.schedule = RandomActivation(self)
+        self.running = True
+        self.seconds = seconds
+        spaces = self.grid.width * self.grid.height
+        rspaces = list(range(spaces))
+        rspaces.remove(1)
 
-        for i in range(2):
-            x = self.random.randrange(self.grid.width)
-            y = self.random.randrange(self.grid.height)
-            agent_type = 0
-            agent = AspiradoraAgent((x, y), self, agent_type)
-            self.schedule.add(agent)
-            # Add the agent to a random grid cell
-            self.grid.place_agent(agent, (x, y))
-            print("Equis: " + str(x) + " Igriega: " + str(y))
+        # Create Roombas
+        for i in range(self.num_agents):
+            a = AspiradoraAgent(i, self, "Roomba")
+            self.schedule.add(a)
 
-        for i in range(number_of_agents):
+            # Start them on position (1, 1)
             x = 1
             y = 1
-            agent_type = 1
-            agent = AspiradoraAgent((x, y), self, agent_type)
-            self.schedule.add(agent)
-            # Add the agent to a random grid cell
-            self.grid.place_agent(agent, (x, y))
-            print("Equis: " + str(x) + " Igriega: " + str(y))
-            self.schedule.step()
+            self.grid.place_agent(a, (x, y))
 
+        # Create Trashes
+        for i in range(20,20+self.num_trashes):
+            b = AspiradoraAgent(i, self,"Basura")
+            self.schedule.add(b)
+            
+            # Add the agent to a random grid cell
+            place = self.random.choice(rspaces)
+            rspaces.remove(place)
+            place = [int(x) for x in str(place)]
+            if len (place) <= 1:
+                x = int(place[0])
+                y = int(place[0])
+            else:
+                x = int(place[0])
+                y = int(place[1])
+            self.grid.place_agent(b, (x, y))
+            
         self.datacollector_currents = DataCollector(
         {
-            "Clean Agents": AspiradoraModel.current_clean_agents,
-            "Non Clean Agents": AspiradoraModel.current_non_clean_agents,
+            "Trashes": ModeloRoomba.current_trashes,
+            "Time": ModeloRoomba.timer,
         }
         )
-    
+
     def step(self):
+        """Advance the model by one step.
+        
+        Args:
+            None
+            
+        Returns:
+            None
+        """
         self.schedule.step()
-        # Collect data
         self.datacollector_currents.collect(self)
-        # End Condition
-        if AspiradoraModel.current_non_clean_agents(self) == 0:
+        if ModeloRoomba.current_trashes(self) == 0 or self.seconds == 0:
             self.running = False
 
-
     @staticmethod
-    def current_clean_agents(model) -> int:
-        """ Return the total numbre of clean agents
+    def current_trashes(model) -> int:
+        """ Return the total number of trashes 
 
         Args:
-            model(AspiradoraModel): Tee simulation model
+            model(AspiradoraModel)
 
         Returns: 
-            int: Number of clean agents
+            int: Number of Trashes
         """
-        return sum([1 for agent in model.schedule.agents if agent.type == 1])
+        return sum([1 for agent in model.schedule.agents if agent.type == "Basura"]) 
 
     @staticmethod
-    def current_non_clean_agents(model) -> int:
-        """ Return the total numbre of non clean agents
+    def timer(self):
+        """ Return the number of seconds left in the simulation
 
         Args:
-            model(AspiradoraModel): Tee simulation model
+            self(ModeloRoomba)
 
-        Returns: 
-            int: Number of non clean agents
+        Returns:
+            int: Number of seconds left in the simulation
         """
-        return sum([1 for agent in model.schedule.agents if agent.type == 0]) 
+        while self.seconds:
+            mins, secs = divmod(self.seconds, 60)
+            timeFormat = '{:02d}:{:02d}'.format(mins, secs)
+            print(timeFormat, end="\r")
+            time.sleep(1)
+            self.seconds -= 1
+            return self.seconds 
